@@ -29,5 +29,5 @@ This blueprint advises when to open or close windows and doors to use outdoor ai
 
 Use this URL in Home Assistant:
 
-```[text](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FHoekeren%2Fhome-assistant-blueprints%2Frefs%2Fheads%2Fmain%2Fautomation%2Fclimate_ventilation_advisory.yaml)
-INDSÆT_DIN_RAW_URL_HER
+```[text]
+https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2FHoekeren%2Fhome-assistant-blueprints%2Frefs%2Fheads%2Fmain%2Fautomation%2Fclimate_ventilation_advisory.yamlINDSÆT_DIN_RAW_URL_HER
