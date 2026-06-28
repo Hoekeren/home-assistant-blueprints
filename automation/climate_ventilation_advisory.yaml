@@ -2,12 +2,8 @@ blueprint:
   name: Climate ventilation advisory
   description: >
     Advises when windows or doors should be opened or closed to use ventilation
-    for indoor temperature regulation. The notification language can be selected.
-    Notification and TTS are optional, but at least one valid delivery method
-    must be configured.
-
-    This version is robust against unavailable/unknown window and door sensors:
-    unavailable openings are ignored instead of blocking the entire advisory.
+    for indoor temperature regulation. The advisory message states the specific
+    reason for the recommendation.
   domain: automation
   author: Christian Skallerup-Børgesen
   source_url: https://raw.githubusercontent.com/Hoekeren/home-assistant-blueprints/refs/heads/main/automation/climate_ventilation_advisory.yaml
@@ -55,9 +51,7 @@ blueprint:
 
     opening_entities:
       name: Windows and doors
-      description: >
-        Select the window and door contact sensors to monitor.
-        Unavailable or unknown sensors are ignored so they do not block the advisory.
+      description: Select the window and door contact sensors to monitor.
       selector:
         entity:
           multiple: true
@@ -274,22 +268,20 @@ variables:
 trigger:
   - platform: template
     id: open_windows_cooling
-    alias: Open windows - indoor is warm, outdoor is cooler, and all available selected openings are closed
+    alias: Open windows - indoor is warm, outdoor is cooler, and all selected openings are closed
     value_template: >
-      {% set opening_list = expand(openings) | list %}
-      {% set open_count = opening_list | selectattr('state', 'eq', 'on') | list | count %}
-      {% set unavailable_count = opening_list | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count %}
-      {% set known_count = (opening_list | count) - unavailable_count %}
+      {% set open_count = expand(openings) | selectattr('state', 'eq', 'on') | list | count %}
+      {% set unavailable_count = expand(openings) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count %}
       {% set indoor_valid = states(indoor_sensor) not in ['unknown', 'unavailable', 'none'] %}
       {% set outdoor_valid = states(outdoor_sensor) not in ['unknown', 'unavailable', 'none'] %}
       {% set indoor = states(indoor_sensor) | float(0) %}
       {% set outdoor = states(outdoor_sensor) | float(0) %}
-      {% set bad_weather = states(weather_entity_id) in ['rainy', 'pouring', 'snowy', 'snowy-rainy', 'lightning', 'lightning-rainy', 'hail'] %}
+      {% set bad_weather = states(weather_entity_id) in bad_weather_states %}
       {% set wind = state_attr(weather_entity_id, 'wind_speed') | float(0) %}
       {{
         indoor_valid
         and outdoor_valid
-        and known_count > 0
+        and unavailable_count == 0
         and open_count == 0
         and indoor >= (open_indoor_temperature_value | float(0))
         and outdoor >= (minimum_outdoor_open_temperature_value | float(0))
@@ -302,22 +294,20 @@ trigger:
 
   - platform: template
     id: close_windows_not_beneficial
-    alias: Close windows - selected available openings are open and ventilation is no longer beneficial
+    alias: Close windows - selected openings are open and ventilation is no longer beneficial
     value_template: >
-      {% set opening_list = expand(openings) | list %}
-      {% set open_count = opening_list | selectattr('state', 'eq', 'on') | list | count %}
-      {% set unavailable_count = opening_list | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count %}
-      {% set known_count = (opening_list | count) - unavailable_count %}
+      {% set open_count = expand(openings) | selectattr('state', 'eq', 'on') | list | count %}
+      {% set unavailable_count = expand(openings) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count %}
       {% set indoor_valid = states(indoor_sensor) not in ['unknown', 'unavailable', 'none'] %}
       {% set outdoor_valid = states(outdoor_sensor) not in ['unknown', 'unavailable', 'none'] %}
       {% set indoor = states(indoor_sensor) | float(0) %}
       {% set outdoor = states(outdoor_sensor) | float(0) %}
-      {% set bad_weather = states(weather_entity_id) in ['rainy', 'pouring', 'snowy', 'snowy-rainy', 'lightning', 'lightning-rainy', 'hail'] %}
+      {% set bad_weather = states(weather_entity_id) in bad_weather_states %}
       {% set wind = state_attr(weather_entity_id, 'wind_speed') | float(0) %}
       {{
         indoor_valid
         and outdoor_valid
-        and known_count > 0
+        and unavailable_count == 0
         and open_count > 0
         and (
           indoor <= (close_indoor_temperature_value | float(0))
@@ -361,182 +351,194 @@ action:
   - variables:
       trigger_id: >
         {{ trigger.id if trigger is defined and trigger.id is defined else 'manual_run' }}
-
       indoor: "{{ states(indoor_sensor) | float(0) }}"
-      outdoor: "{{ states(outdoor_sensor) | float(0) }}"
-      weather_state: "{{ states(weather_entity_id) }}"
-      wind_speed: "{{ state_attr(weather_entity_id, 'wind_speed') | float(0) }}"
-
-      opening_list_count: >
-        {{ expand(openings) | list | count }}
-
+        {{ expand(openings) | selectattr('state', 'eq', 'on') | list | count }}
       unavailable_count: >
         {{ expand(openings) | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
-
-      known_count: >
-        {% set opening_list = expand(openings) | list %}
-        {% set unavailable_count = opening_list | selectattr('state', 'in', ['unknown', 'unavailable']) | list | count %}
-        {{ (opening_list | count) - unavailable_count }}
-
-      open_count: >
-        {{ expand(openings) | selectattr('state', 'eq', 'on') | list | count }}
-
       open_names: >
         {{ expand(openings) | selectattr('state', 'eq', 'on') | map(attribute='name') | list | join(', ') }}
-
-      unavailable_names: >
-        {{ expand(openings) | selectattr('state', 'in', ['unknown', 'unavailable']) | map(attribute='name') | list | join(', ') }}
-
       bad_weather: >
         {{ states(weather_entity_id) in bad_weather_states }}
-
       notify_ready: >
         {{ enable_notify | bool(false) and (notify_targets_value | count) > 0 }}
-
       tts_ready: >
         {{
           enable_tts | bool(false)
           and tts_engine_entity not in ['', 'none', 'None', none]
           and (tts_media_player_entities | count) > 0
         }}
-
       delivery_ready: >
         {{
-          (
-            enable_notify | bool(false)
-            and (notify_targets_value | count) > 0
-          )
-          or
-          (
+          (enable_notify | bool(false) and (notify_targets_value | count) > 0)
+          or (
             enable_tts | bool(false)
             and tts_engine_entity not in ['', 'none', 'None', none]
             and (tts_media_player_entities | count) > 0
           )
         }}
 
-      unavailable_note: >
-        {%- if unavailable_count | int(0) > 0 -%}
-          {%- if advisory_language == 'en' -%}
-            Note: these selected sensors were unavailable and ignored: {{ unavailable_names }}.
-          {%- elif advisory_language == 'de' -%}
-            Hinweis: Diese ausgewählten Sensoren waren nicht verfügbar und wurden ignoriert: {{ unavailable_names }}.
-          {%- else -%}
-            Bemærk: Følgende valgte sensorer var utilgængelige og blev ignoreret: {{ unavailable_names }}.
-          {%- endif -%}
+      weather_reason_da: >
+        {%- set labels = {
+          'rainy': 'regn',
+          'pouring': 'kraftig regn',
+          'snowy': 'sne',
+          'snowy-rainy': 'slud',
+          'lightning': 'torden',
+          'lightning-rainy': 'torden og regn',
+          'hail': 'hagl'
+        } -%}
+        {{ labels.get(weather_state, weather_state) }}
+      weather_reason_en: >
+        {%- set labels = {
+          'rainy': 'rain',
+          'pouring': 'heavy rain',
+          'snowy': 'snow',
+          'snowy-rainy': 'sleet',
+          'lightning': 'thunder',
+          'lightning-rainy': 'thunder and rain',
+          'hail': 'hail'
+        } -%}
+        {{ labels.get(weather_state, weather_state) }}
+      weather_reason_de: >
+        {%- set labels = {
+          'rainy': 'Regen',
+          'pouring': 'starker Regen',
+          'snowy': 'Schnee',
+          'snowy-rainy': 'Schneeregen',
+          'lightning': 'Gewitter',
+          'lightning-rainy': 'Gewitter und Regen',
+          'hail': 'Hagel'
+        } -%}
+        {{ labels.get(weather_state, weather_state) }}
+
+      open_reason_text: >
+        {%- if advisory_language == 'en' -%}
+          outdoor temperature is {{ outdoor | round(1) }} °C and {{ temperature_difference }} °C cooler than indoor
+        {%- elif advisory_language == 'de' -%}
+          außen sind es {{ outdoor | round(1) }} °C und {{ temperature_difference }} °C kühler als innen
+        {%- else -%}
+          udetemperaturen er {{ outdoor | round(1) }} °C og {{ temperature_difference }} °C lavere end inde
         {%- endif -%}
 
-      reason_text: >
-        {%- if advisory_language == 'en' -%}
-          {%- if trigger_id == 'open_windows_cooling' -%}
-            Indoor is warm, outdoor is cooler, and all available selected openings are closed
-          {%- elif trigger_id == 'close_windows_not_beneficial' -%}
-            Ventilation is no longer clearly beneficial
-          {%- elif trigger_id == 'morning_check_ventilation' -%}
-            Scheduled morning check
-          {%- elif trigger_id == 'evening_check_close_windows' -%}
-            Scheduled evening check
+      close_reason_text: >
+        {%- if bad_weather | bool(false) -%}
+          {%- if advisory_language == 'en' -%}
+            {{ weather_reason_en }} is forecast
+          {%- elif advisory_language == 'de' -%}
+            {{ weather_reason_de }} ist gemeldet
           {%- else -%}
-            Manual run or unknown trigger
+            der er varslet {{ weather_reason_da }}
           {%- endif -%}
-        {%- elif advisory_language == 'de' -%}
-          {%- if trigger_id == 'open_windows_cooling' -%}
-            Innen ist es warm, außen ist es kühler, und alle verfügbaren ausgewählten Öffnungen sind geschlossen
-          {%- elif trigger_id == 'close_windows_not_beneficial' -%}
-            Lüften bringt keinen klaren Temperaturvorteil mehr
-          {%- elif trigger_id == 'morning_check_ventilation' -%}
-            Geplante Morgenprüfung
-          {%- elif trigger_id == 'evening_check_close_windows' -%}
-            Geplante Abendprüfung
+        {%- elif (wind_speed | float(0)) >= (maximum_wind_speed_value | float(0)) -%}
+          {%- if advisory_language == 'en' -%}
+            wind speed is {{ wind_speed | round(1) }}, limit is {{ maximum_wind_speed_value | round(1) }}
+          {%- elif advisory_language == 'de' -%}
+            Wind ist {{ wind_speed | round(1) }}, Grenzwert ist {{ maximum_wind_speed_value | round(1) }}
           {%- else -%}
-            Manueller Lauf oder unbekannter Auslöser
+            vinden er {{ wind_speed | round(1) }}, grænsen er {{ maximum_wind_speed_value | round(1) }}
+          {%- endif -%}
+        {%- elif (outdoor | float(0)) > (indoor | float(0)) -%}
+          {%- if advisory_language == 'en' -%}
+            outdoor temperature is higher than indoor: {{ outdoor | round(1) }} °C vs {{ indoor | round(1) }} °C
+          {%- elif advisory_language == 'de' -%}
+            außen ist es wärmer als innen: {{ outdoor | round(1) }} °C gegen {{ indoor | round(1) }} °C
+          {%- else -%}
+            udetemperaturen er højere end indetemperaturen: {{ outdoor | round(1) }} °C mod {{ indoor | round(1) }} °C
+          {%- endif -%}
+        {%- elif (outdoor | float(0)) >= ((indoor | float(0)) - (close_temperature_difference_value | float(0))) -%}
+          {%- if advisory_language == 'en' -%}
+            outdoor is only {{ temperature_difference }} °C cooler; minimum benefit is {{ close_temperature_difference_value | round(1) }} °C
+          {%- elif advisory_language == 'de' -%}
+            außen ist es nur {{ temperature_difference }} °C kühler; Mindestvorteil ist {{ close_temperature_difference_value | round(1) }} °C
+          {%- else -%}
+            ude er kun {{ temperature_difference }} °C køligere; minimumsfordelen er {{ close_temperature_difference_value | round(1) }} °C
+          {%- endif -%}
+        {%- elif (outdoor | float(0)) < (minimum_outdoor_close_temperature_value | float(0)) -%}
+          {%- if advisory_language == 'en' -%}
+            outdoor temperature is too low: {{ outdoor | round(1) }} °C
+          {%- elif advisory_language == 'de' -%}
+            die Außentemperatur ist zu niedrig: {{ outdoor | round(1) }} °C
+          {%- else -%}
+            udetemperaturen er for lav: {{ outdoor | round(1) }} °C
+          {%- endif -%}
+        {%- elif (indoor | float(0)) <= (close_indoor_temperature_value | float(0)) -%}
+          {%- if advisory_language == 'en' -%}
+            target indoor temperature has been reached: {{ indoor | round(1) }} °C
+          {%- elif advisory_language == 'de' -%}
+            die Zieltemperatur innen ist erreicht: {{ indoor | round(1) }} °C
+          {%- else -%}
+            ønsket indetemperatur er nået: {{ indoor | round(1) }} °C
+          {%- endif -%}
+        {%- elif trigger_id == 'evening_check_close_windows' -%}
+          {%- if advisory_language == 'en' -%}
+            evening check before night
+          {%- elif advisory_language == 'de' -%}
+            Abendprüfung vor der Nacht
+          {%- else -%}
+            aftencheck før natten
           {%- endif -%}
         {%- else -%}
-          {%- if trigger_id == 'open_windows_cooling' -%}
-            Inde er varmt, ude er køligere, og alle tilgængelige valgte åbninger er lukkede
-          {%- elif trigger_id == 'close_windows_not_beneficial' -%}
-            Udluftning giver ikke længere en klar temperaturmæssig fordel
-          {%- elif trigger_id == 'morning_check_ventilation' -%}
-            Planlagt morgencheck
-          {%- elif trigger_id == 'evening_check_close_windows' -%}
-            Planlagt aftencheck
+          {%- if advisory_language == 'en' -%}
+            ventilation is no longer beneficial
+          {%- elif advisory_language == 'de' -%}
+            Lüften bringt keinen klaren Vorteil mehr
           {%- else -%}
-            Manuel kørsel eller ukendt udløser
+            udluftning giver ikke længere klar fordel
           {%- endif -%}
         {%- endif -%}
 
       open_title: >
         {%- if advisory_language == 'en' -%}
-          Open windows for cooling
+          Open windows - cooling is beneficial
         {%- elif advisory_language == 'de' -%}
-          Fenster zum Kühlen öffnen
+          Fenster öffnen - Kühlung ist vorteilhaft
         {%- else -%}
-          Åbn vinduer for køling
+          Åbn vinduerne - køling er fordelagtig
         {%- endif -%}
 
       close_title: >
         {%- if advisory_language == 'en' -%}
-          Close the windows again
+          Close windows - {{ close_reason_text }}
         {%- elif advisory_language == 'de' -%}
-          Fenster wieder schließen
+          Fenster schließen - {{ close_reason_text }}
         {%- else -%}
-          Luk vinduerne igen
+          Luk vinduerne - {{ close_reason_text }}
         {%- endif -%}
 
       open_message: >
         {%- if advisory_language == 'en' -%}
-          Indoor temperature is {{ indoor | round(1) }} °C, and outdoor temperature is {{ outdoor | round(1) }} °C.
-          All available selected windows and doors are closed. The outdoor air is cooler than indoors, so this is a good time
-          to ventilate in order to lower or stabilise the indoor temperature. Reason: {{ reason_text }}.
-          {{ unavailable_note }}
+          Open windows - {{ open_reason_text }}.
         {%- elif advisory_language == 'de' -%}
-          Die Innentemperatur beträgt {{ indoor | round(1) }} °C, und die Außentemperatur beträgt {{ outdoor | round(1) }} °C.
-          Alle verfügbaren ausgewählten Fenster und Türen sind geschlossen. Die Außenluft ist kühler als die Innenluft,
-          daher ist jetzt ein guter Zeitpunkt zum Lüften, um die Temperatur zu senken oder zu stabilisieren.
-          Grund: {{ reason_text }}. {{ unavailable_note }}
+          Fenster öffnen - {{ open_reason_text }}.
         {%- else -%}
-          Indetemperaturen er {{ indoor | round(1) }} °C, og udetemperaturen er {{ outdoor | round(1) }} °C.
-          Alle tilgængelige valgte vinduer og døre er lukkede. Udeluften er køligere end inde, så det er et godt tidspunkt
-          at lufte ud for at sænke eller stabilisere temperaturen. Årsag: {{ reason_text }}.
-          {{ unavailable_note }}
+          Åbn vinduerne - {{ open_reason_text }}.
         {%- endif -%}
 
       close_message: >
         {%- if advisory_language == 'en' -%}
-          Indoor temperature is {{ indoor | round(1) }} °C, and outdoor temperature is {{ outdoor | round(1) }} °C.
-          These selected openings are open: {{ open_names }}. Ventilation no longer gives a clear temperature benefit,
-          or the windows should be closed because of temperature, wind, weather or time of day.
-          Reason: {{ reason_text }}. {{ unavailable_note }}
+          Close windows - {{ close_reason_text }}. Open: {{ open_names }}.
         {%- elif advisory_language == 'de' -%}
-          Die Innentemperatur beträgt {{ indoor | round(1) }} °C, und die Außentemperatur beträgt {{ outdoor | round(1) }} °C.
-          Diese ausgewählten Öffnungen sind offen: {{ open_names }}. Lüften bringt keinen klaren Temperaturvorteil mehr,
-          oder es sollte wegen Temperatur, Wind, Wetter oder Tageszeit geschlossen werden.
-          Grund: {{ reason_text }}. {{ unavailable_note }}
+          Fenster schließen - {{ close_reason_text }}. Offen: {{ open_names }}.
         {%- else -%}
-          Indetemperaturen er {{ indoor | round(1) }} °C, og udetemperaturen er {{ outdoor | round(1) }} °C.
-          Følgende valgte åbninger er åbne: {{ open_names }}. Udluftning giver ikke længere en klar temperaturmæssig fordel,
-          eller der bør lukkes på grund af temperatur, vind, vejr eller tidspunkt.
-          Årsag: {{ reason_text }}. {{ unavailable_note }}
+          Luk vinduerne - {{ close_reason_text }}. Åbne: {{ open_names }}.
         {%- endif -%}
 
       open_tts_message: >
         {%- if advisory_language == 'en' -%}
-          It is a good time to open the windows for cooling. Indoor temperature is {{ indoor | round(1) }} degrees,
-          and outdoor temperature is {{ outdoor | round(1) }} degrees.
+          Open windows. {{ open_reason_text }}.
         {%- elif advisory_language == 'de' -%}
-          Jetzt ist ein guter Zeitpunkt, die Fenster zum Kühlen zu öffnen. Die Innentemperatur beträgt
-          {{ indoor | round(1) }} Grad, und die Außentemperatur beträgt {{ outdoor | round(1) }} Grad.
+          Fenster öffnen. {{ open_reason_text }}.
         {%- else -%}
-          Det er et godt tidspunkt at åbne vinduerne for at køle boligen. Indetemperaturen er
-          {{ indoor | round(1) }} grader, og udetemperaturen er {{ outdoor | round(1) }} grader.
+          Åbn vinduerne. {{ open_reason_text }}.
         {%- endif -%}
 
       close_tts_message: >
         {%- if advisory_language == 'en' -%}
-          The windows should be closed again. Ventilation no longer gives a clear temperature benefit.
+          Close windows. {{ close_reason_text }}.
         {%- elif advisory_language == 'de' -%}
-          Die Fenster sollten wieder geschlossen werden. Lüften bringt keinen klaren Temperaturvorteil mehr.
+          Fenster schließen. {{ close_reason_text }}.
         {%- else -%}
-          Vinduerne bør lukkes igen. Udluftning giver ikke længere en klar temperaturmæssig fordel.
+          Luk vinduerne. {{ close_reason_text }}.
         {%- endif -%}
 
   - condition: template
@@ -548,12 +550,11 @@ action:
           - condition: template
             value_template: >
               {{
-                known_count | int(0) > 0
+                unavailable_count | int(0) == 0
                 and open_count | int(0) == 0
                 and (
                   trigger_id == 'open_windows_cooling'
-                  or
-                  (
+                  or (
                     trigger_id == 'morning_check_ventilation'
                     and (indoor | float(0)) >= (open_indoor_temperature_value | float(0))
                     and (outdoor | float(0)) >= (minimum_outdoor_open_temperature_value | float(0))
@@ -591,16 +592,14 @@ action:
           - condition: template
             value_template: >
               {{
-                known_count | int(0) > 0
+                unavailable_count | int(0) == 0
                 and open_count | int(0) > 0
                 and (
                   trigger_id == 'close_windows_not_beneficial'
                   or trigger_id == 'evening_check_close_windows'
-                  or
-                  (
+                  or (
                     trigger_id == 'morning_check_ventilation'
-                    and
-                    (
+                    and (
                       (indoor | float(0)) <= (close_indoor_temperature_value | float(0))
                       or (outdoor | float(0)) < (minimum_outdoor_close_temperature_value | float(0))
                       or (outdoor | float(0)) >= ((indoor | float(0)) - (close_temperature_difference_value | float(0)))
