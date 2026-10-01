@@ -69,12 +69,14 @@ blueprint:
 
     enable_notify:
       name: Enable notifications
+      description: If enabled, the advisory is sent to the selected notification targets.
       default: true
       selector:
         boolean: {}
 
     notify_targets:
       name: Notification targets
+      description: Select one or more notification targets. Only used when notifications are enabled.
       default: {}
       selector:
         target:
@@ -85,12 +87,14 @@ blueprint:
 
     enable_tts:
       name: Enable optional TTS
+      description: If enabled, the advisory is also spoken on the selected media players.
       default: false
       selector:
         boolean: {}
 
     tts_engine:
       name: TTS engine
+      description: Select the TTS entity to use. Only used when optional TTS is enabled.
       default: ""
       selector:
         entity:
@@ -99,6 +103,7 @@ blueprint:
 
     tts_media_players:
       name: TTS media players
+      description: Select one or more speakers/media players. Only used when optional TTS is enabled.
       default: []
       selector:
         entity:
@@ -152,6 +157,7 @@ blueprint:
 
     open_temperature_difference:
       name: Minimum cooling benefit before opening advisory
+      description: Outdoor temperature must be this many degrees cooler than indoor temperature.
       default: 1.0
       selector:
         number:
@@ -163,6 +169,7 @@ blueprint:
 
     close_temperature_difference:
       name: Minimum remaining benefit before keeping windows open
+      description: Closing is advised when the outdoor temperature is no longer sufficiently cooler.
       default: 0.3
       selector:
         number:
