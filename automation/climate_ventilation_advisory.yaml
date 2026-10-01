@@ -28,6 +28,7 @@ blueprint:
 
     indoor_temperature_sensor:
       name: Indoor temperature sensor
+      description: Temperature sensor for the room or home to regulate.
       selector:
         entity:
           filter:
@@ -36,6 +37,7 @@ blueprint:
 
     outdoor_temperature_sensor:
       name: Outdoor temperature sensor
+      description: Temperature sensor measuring the outdoor air.
       selector:
         entity:
           filter:
@@ -44,6 +46,7 @@ blueprint:
 
     weather_entity:
       name: Weather entity
+      description: Used to check for bad weather (e.g. rain) and wind speed.
       selector:
         entity:
           filter:
@@ -69,12 +72,14 @@ blueprint:
 
     enable_notify:
       name: Enable notifications
+      description: If enabled, the advisory is sent to the selected notification targets.
       default: true
       selector:
         boolean: {}
 
     notify_targets:
       name: Notification targets
+      description: Select one or more notification targets. Only used when notifications are enabled.
       default: {}
       selector:
         target:
@@ -85,12 +90,14 @@ blueprint:
 
     enable_tts:
       name: Enable optional TTS
+      description: If enabled, the advisory is also spoken on the selected media players.
       default: false
       selector:
         boolean: {}
 
     tts_engine:
       name: TTS engine
+      description: Select the TTS entity to use. Only used when optional TTS is enabled.
       default: ""
       selector:
         entity:
@@ -99,6 +106,7 @@ blueprint:
 
     tts_media_players:
       name: TTS media players
+      description: Select one or more speakers/media players. Only used when optional TTS is enabled.
       default: []
       selector:
         entity:
@@ -108,6 +116,7 @@ blueprint:
 
     open_indoor_temperature:
       name: Minimum indoor temperature before opening advisory
+      description: Opening is only advised when the indoor temperature is at or above this value.
       default: 22.7
       selector:
         number:
@@ -119,6 +128,7 @@ blueprint:
 
     close_indoor_temperature:
       name: Indoor temperature where closing is advised
+      description: Closing is advised when the indoor temperature has dropped to this value or below.
       default: 22.0
       selector:
         number:
@@ -130,6 +140,7 @@ blueprint:
 
     minimum_outdoor_open_temperature:
       name: Minimum outdoor temperature for opening advisory
+      description: Opening is only advised when the outdoor temperature is at or above this value.
       default: 10
       selector:
         number:
@@ -141,6 +152,7 @@ blueprint:
 
     minimum_outdoor_close_temperature:
       name: Outdoor temperature where closing is advised
+      description: Closing is advised when the outdoor temperature drops below this value.
       default: 8
       selector:
         number:
@@ -152,6 +164,7 @@ blueprint:
 
     open_temperature_difference:
       name: Minimum cooling benefit before opening advisory
+      description: Outdoor temperature must be this many degrees cooler than indoor temperature.
       default: 1.0
       selector:
         number:
@@ -163,6 +176,7 @@ blueprint:
 
     close_temperature_difference:
       name: Minimum remaining benefit before keeping windows open
+      description: Closing is advised when the outdoor temperature is no longer sufficiently cooler.
       default: 0.3
       selector:
         number:
@@ -174,6 +188,7 @@ blueprint:
 
     maximum_wind_speed:
       name: Maximum wind speed before closing advisory
+      description: "Opening is only advised below this wind speed, and closing is advised at or above it. Uses the weather entity's wind speed unit."
       default: 12
       selector:
         number:
@@ -184,6 +199,7 @@ blueprint:
 
     stable_minutes:
       name: Condition must be stable for
+      description: How long the open or close conditions must hold before an advisory is sent.
       default: 5
       selector:
         number:
@@ -195,24 +211,28 @@ blueprint:
 
     morning_check_time:
       name: Morning check time
+      description: Time to evaluate whether ventilation is beneficial after the night.
       default: "06:45:00"
       selector:
         time: {}
 
     evening_check_time:
       name: Evening check time
+      description: Time to remind you to close any open windows or doors before the night.
       default: "22:10:00"
       selector:
         time: {}
 
     active_after:
       name: Active after
+      description: No advisories are sent before this time.
       default: "06:30:00"
       selector:
         time: {}
 
     active_before:
       name: Active before
+      description: No advisories are sent after this time.
       default: "22:15:00"
       selector:
         time: {}
